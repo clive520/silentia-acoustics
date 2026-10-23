@@ -446,9 +446,36 @@ function initReviewsSystem() {
       reviewsData.unshift(newReview);
       renderReviews('全部');
 
+      // 同步寫入 Google 試算表後端
+      if (window.GASBackendService) {
+        window.GASBackendService.syncReview(newReview);
+      }
+
       reviewForm.reset();
       reviewModal.classList.add('hidden');
       alert('感謝您的回饋！您的真實評價已發佈。');
+    });
+  }
+
+  // 嘗試從 Google 試算表載入最新評價
+  if (window.GASBackendService) {
+    window.GASBackendService.fetchReviews().then((remoteReviews) => {
+      if (remoteReviews && remoteReviews.length > 0) {
+        remoteReviews.forEach((r) => {
+          reviewsData.unshift({
+            id: r.review_id || Date.now(),
+            name: r.author_name,
+            role: r.author_role || '已驗證買家',
+            edition: r.purchased_edition,
+            rating: Number(r.rating) || 5,
+            date: r.created_at || '近期',
+            tag: r.tag || '音質',
+            comment: r.comment,
+            likes: Number(r.likes_count) || 1
+          });
+        });
+        renderReviews('全部');
+      }
     });
   }
 
@@ -642,6 +669,23 @@ function initCheckoutSystem() {
           document.getElementById('receipt-last4').textContent = result.cardLast4;
           document.getElementById('receipt-address').textContent = result.shippingAddress;
           document.getElementById('receipt-auth-code').textContent = result.authCode;
+
+          // 同步將訂單記錄傳送至 Google 試算表 (Orders 分頁)
+          const shippingMethod = document.querySelector('input[name="shipping"]:checked')?.value || '黑貓宅配 (免運)';
+          if (window.GASBackendService) {
+            window.GASBackendService.syncOrder({
+              tradeNo: result.tradeNo,
+              tradeDate: result.tradeDate,
+              productEdition: editions[currentEdition].name,
+              amount: editions[currentEdition].price,
+              customerName,
+              customerPhone,
+              shippingAddress,
+              shippingMethod,
+              cardLast4: result.cardLast4,
+              authCode: result.authCode
+            });
+          }
 
           closeDrawer();
           checkoutSuccessModal.classList.remove('hidden');
